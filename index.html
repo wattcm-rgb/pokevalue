@@ -13,6 +13,8 @@
 </head>
 <body>
 
+<div class="app-shell">
+
 <header class="site-header">
   <div class="header-inner">
     <div class="brand">
@@ -36,11 +38,8 @@
     </div>
 
     <div class="filter-group">
-      <div class="filter-label">Category</div>
-      <select id="category-select" aria-label="Filter by category">
-        <option value="">All categories</option>
-      </select>
-      <span class="filter-hint">Fills in as the Pokédex is browsed</span>
+      <div class="filter-label">Category <span id="category-loading" class="filter-hint" hidden>loading…</span></div>
+      <div id="category-chips" class="chip-row" role="group" aria-label="Filter by category"></div>
     </div>
   </section>
 
@@ -54,6 +53,8 @@
 <footer class="site-footer">
   <p>Data from <a href="https://pokeapi.co/" target="_blank" rel="noopener">PokéAPI</a>. Pokémon and Pokémon character names are trademarks of Nintendo.</p>
 </footer>
+
+</div>
 
 <div id="modal-overlay" class="modal-overlay" hidden>
   <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-name">

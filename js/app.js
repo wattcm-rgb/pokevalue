@@ -17,7 +17,8 @@
   const sentinel = document.getElementById('sentinel');
   const searchInput = document.getElementById('search-input');
   const typeChipsEl = document.getElementById('type-chips');
-  const categorySelect = document.getElementById('category-select');
+  const categoryChipsEl = document.getElementById('category-chips');
+  const categoryLoadingEl = document.getElementById('category-loading');
 
   const modalOverlay = document.getElementById('modal-overlay');
   const modalBody = document.getElementById('modal-body');
@@ -33,6 +34,7 @@
 
   async function init() {
     buildTypeChips();
+    buildCategoryChips();
     setupObservers();
     bindControls();
     bindModal();
@@ -47,6 +49,7 @@
     }
     statusEl.textContent = '';
     applyFilters();
+    ensureGenusDiscovery();
   }
 
   // ---------- Observers ----------
@@ -115,13 +118,25 @@
         applyFilters();
       }, 200);
     });
+  }
 
-    categorySelect.addEventListener('focus', ensureGenusDiscovery);
-    categorySelect.addEventListener('change', () => {
-      state.category = categorySelect.value;
-      if (state.category) ensureGenusDiscovery();
-      applyFilters();
-    });
+  // ---------- Category chips ----------
+
+  function buildCategoryChips() {
+    const allChip = document.createElement('button');
+    allChip.type = 'button';
+    allChip.className = 'chip category active';
+    allChip.textContent = 'All';
+    allChip.dataset.category = '';
+    allChip.addEventListener('click', () => onCategoryChipClick('', allChip));
+    categoryChipsEl.appendChild(allChip);
+  }
+
+  function onCategoryChipClick(genus, btn) {
+    state.category = genus;
+    categoryChipsEl.querySelectorAll('.chip').forEach((c) => c.classList.remove('active'));
+    btn.classList.add('active');
+    applyFilters();
   }
 
   // ---------- Genus / category discovery ----------
@@ -135,6 +150,8 @@
   async function runGenusDiscovery() {
     const CONCURRENCY = 6;
     const queue = state.speciesList.filter((p) => !(p.id in state.genusById));
+    if (!queue.length) return;
+    categoryLoadingEl.hidden = false;
     let idx = 0;
 
     async function worker() {
@@ -148,6 +165,7 @@
     }
 
     await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+    categoryLoadingEl.hidden = true;
   }
 
   function recordGenus(id, species) {
@@ -160,17 +178,21 @@
   }
 
   function addCategoryOption(genus) {
-    const already = Array.from(categorySelect.options).some((o) => o.value === genus);
+    const already = Array.from(categoryChipsEl.querySelectorAll('.chip')).some((c) => c.dataset.category === genus);
     if (already) return;
-    const opt = document.createElement('option');
-    opt.value = genus;
-    opt.textContent = genus;
-    const options = Array.from(categorySelect.options);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'chip category';
+    btn.textContent = genus;
+    btn.dataset.category = genus;
+    btn.addEventListener('click', () => onCategoryChipClick(genus, btn));
+
+    const chips = Array.from(categoryChipsEl.querySelectorAll('.chip'));
     let insertBefore = null;
-    for (let i = 1; i < options.length; i++) {
-      if (options[i].value.localeCompare(genus) > 0) { insertBefore = options[i]; break; }
+    for (let i = 1; i < chips.length; i++) {
+      if (chips[i].dataset.category.localeCompare(genus) > 0) { insertBefore = chips[i]; break; }
     }
-    categorySelect.insertBefore(opt, insertBefore);
+    categoryChipsEl.insertBefore(btn, insertBefore);
   }
 
   function scheduleFilterRefresh() {
