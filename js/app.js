@@ -522,10 +522,16 @@
       return `
         <div class="stat-row">
           <span class="stat-name">${label}</span>
-          <span class="stat-track"><span class="stat-fill" style="width:${pct}%"></span></span>
+          <span class="stat-track"><span class="stat-fill" style="width:${pct}%; background:${statColor(pct)}"></span></span>
           <span class="stat-value">${s.base_stat}</span>
         </div>`;
     }).join('');
+  }
+
+  // Red (weak) through yellow to green (strong), scaled to the same /200 basis as the bar width.
+  function statColor(pct) {
+    const hue = Math.round((pct / 100) * 120);
+    return `linear-gradient(90deg, hsl(${hue}, 75%, 55%), hsl(${hue}, 75%, 42%))`;
   }
 
   function buildMovesHTML(movesRaw) {
