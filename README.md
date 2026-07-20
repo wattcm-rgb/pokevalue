@@ -28,4 +28,4 @@ No build step — it's a static site. Serve `index.html` with any static file se
 
 ## Deployment
 
-Deployed via GitHub Actions (`.github/workflows/deploy-pages.yml`) to GitHub Pages on every push to `main`.
+Static files at the repo root — deployed to GitHub Pages by pointing Settings → Pages → Source at the `main` branch (root folder). No build step or Actions workflow required.
