@@ -157,6 +157,35 @@ main {
   margin-top: 0.75rem;
 }
 
+.filter-value {
+  color: var(--ink);
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: normal;
+  margin-left: 0.15rem;
+}
+
+.filter-loading {
+  color: var(--ink-soft);
+  font-weight: 400;
+  font-style: italic;
+  text-transform: none;
+  letter-spacing: normal;
+  margin-left: 0.4rem;
+}
+
+.power-group {
+  margin-top: 0.6rem;
+}
+
+.power-slider {
+  width: 100%;
+  height: 4px;
+  margin: 0;
+  accent-color: var(--red);
+  cursor: pointer;
+}
+
 .filter-label {
   font-size: 0.72rem;
   font-weight: 600;

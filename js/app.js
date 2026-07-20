@@ -13,6 +13,7 @@
     typeNameSets: {},
     collection: {},
     activeTab: 'catalogue',
+    minPower: 0,
   };
 
   const grid = document.getElementById('catalogue-grid');
@@ -24,6 +25,9 @@
   const sentinel = document.getElementById('sentinel');
   const searchInput = document.getElementById('search-input');
   const typeChipsEl = document.getElementById('type-chips');
+  const powerSlider = document.getElementById('power-slider');
+  const powerValueEl = document.getElementById('power-value');
+  const powerLoadingEl = document.getElementById('power-loading');
 
   const modalOverlay = document.getElementById('modal-overlay');
   const modalBody = document.getElementById('modal-body');
@@ -32,6 +36,9 @@
   let cardObserver;
   let scrollObserver;
   let searchTimer = null;
+  let powerTimer = null;
+  let powerDiscoveryStarted = false;
+  let powerRefreshTimer = null;
 
   init();
 
@@ -147,6 +154,17 @@
         refreshActiveView();
       }, 200);
     });
+
+    powerSlider.addEventListener('input', () => {
+      const value = Number(powerSlider.value);
+      powerValueEl.textContent = value === 0 ? 'Any' : `${value}+`;
+      if (value > 0) ensurePowerDiscovery();
+      clearTimeout(powerTimer);
+      powerTimer = setTimeout(() => {
+        state.minPower = value;
+        refreshActiveView();
+      }, 120);
+    });
   }
 
   // ---------- Collection (owned cards) ----------
@@ -225,6 +243,51 @@
     return cached.types.slice().sort((a, b) => a.slot - b.slot).map((t) => t.type.name);
   }
 
+  function powerFor(id) {
+    const cached = PokeAPI.peekPokemon(id);
+    if (!cached) return null;
+    return cached.stats.reduce((sum, s) => sum + s.base_stat, 0);
+  }
+
+  // Total base stats has no bulk PokéAPI endpoint, so a slider that filters the
+  // whole dex needs every Pokémon's stats fetched at least once. Kicked off only
+  // when the slider is actually used, reusing the same per-pokemon cache the
+  // catalogue's lazy type badges already populate.
+  function ensurePowerDiscovery() {
+    if (powerDiscoveryStarted) return;
+    powerDiscoveryStarted = true;
+    runPowerDiscovery();
+  }
+
+  async function runPowerDiscovery() {
+    const CONCURRENCY = 6;
+    const queue = state.speciesList.filter((p) => !PokeAPI.peekPokemon(p.id));
+    if (!queue.length) return;
+    powerLoadingEl.hidden = false;
+    let idx = 0;
+
+    async function worker() {
+      while (idx < queue.length) {
+        const p = queue[idx++];
+        try {
+          await PokeAPI.getPokemon(p.id);
+          if (state.minPower > 0) schedulePowerRefresh();
+        } catch (err) { /* skip failures, keep discovering */ }
+      }
+    }
+
+    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+    powerLoadingEl.hidden = true;
+  }
+
+  function schedulePowerRefresh() {
+    if (powerRefreshTimer) return;
+    powerRefreshTimer = setTimeout(() => {
+      powerRefreshTimer = null;
+      refreshActiveView();
+    }, 400);
+  }
+
   // ---------- Catalogue filtering & rendering ----------
 
   function applyFilters() {
@@ -241,6 +304,12 @@
           if (set && set.has(p.name)) return true;
         }
         return false;
+      });
+    }
+    if (state.minPower > 0) {
+      list = list.filter((p) => {
+        const power = powerFor(p.id);
+        return power !== null && power >= state.minPower;
       });
     }
 
@@ -349,6 +418,12 @@
         const types = typesFor(id) || [];
         for (const t of state.activeTypes) if (types.includes(t)) return true;
         return false;
+      });
+    }
+    if (state.minPower > 0) {
+      ids = ids.filter((id) => {
+        const power = powerFor(id);
+        return power !== null && power >= state.minPower;
       });
     }
 

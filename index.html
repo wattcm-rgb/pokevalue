@@ -32,6 +32,14 @@
       <span id="result-count" class="result-count"></span>
     </div>
 
+    <div class="filter-group power-group">
+      <div class="filter-label">
+        Power <span class="filter-value" id="power-value">Any</span>
+        <span class="filter-loading" id="power-loading" hidden>loading…</span>
+      </div>
+      <input type="range" id="power-slider" class="power-slider" min="0" max="800" step="20" value="0" aria-label="Minimum total base stats">
+    </div>
+
     <div class="filter-group">
       <div class="filter-label">Type</div>
       <div id="type-chips" class="chip-row" role="group" aria-label="Filter by type"></div>
