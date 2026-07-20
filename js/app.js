@@ -1,24 +1,29 @@
 (function () {
+  const COLLECTION_KEY = 'pokevalue:collection';
+  const VARIANTS = ['Normal', 'Holo', 'Reverse Holo', '1st Edition', 'Full Art', 'Promo'];
+
   const state = {
     speciesList: [],
+    speciesById: new Map(),
     filtered: [],
     renderedCount: 0,
     batchSize: 40,
     search: '',
     activeTypes: new Set(),
     typeNameSets: {},
-    category: '',
-    genusById: {},
+    collection: {},
+    activeTab: 'catalogue',
   };
 
   const grid = document.getElementById('catalogue-grid');
+  const myCardsGrid = document.getElementById('my-cards-grid');
+  const catalogueView = document.getElementById('catalogue-view');
+  const myCardsView = document.getElementById('my-cards-view');
   const statusEl = document.getElementById('grid-status');
   const resultCountEl = document.getElementById('result-count');
   const sentinel = document.getElementById('sentinel');
   const searchInput = document.getElementById('search-input');
   const typeChipsEl = document.getElementById('type-chips');
-  const categoryChipsEl = document.getElementById('category-chips');
-  const categoryLoadingEl = document.getElementById('category-loading');
 
   const modalOverlay = document.getElementById('modal-overlay');
   const modalBody = document.getElementById('modal-body');
@@ -26,18 +31,17 @@
 
   let cardObserver;
   let scrollObserver;
-  let genusDiscoveryStarted = false;
-  let refreshTimer = null;
   let searchTimer = null;
 
   init();
 
   async function init() {
+    state.collection = loadCollection();
     buildTypeChips();
-    buildCategoryChips();
     setupObservers();
     bindControls();
     bindModal();
+    bindTabs();
 
     statusEl.textContent = 'Loading Pokédex…';
     try {
@@ -47,9 +51,9 @@
       grid.innerHTML = '<div class="error-banner">Couldn\'t reach PokéAPI. Check your connection and reload the page.</div>';
       return;
     }
+    state.speciesById = new Map(state.speciesList.map((p) => [p.id, p]));
     statusEl.textContent = '';
     applyFilters();
-    ensureGenusDiscovery();
   }
 
   // ---------- Observers ----------
@@ -71,6 +75,31 @@
     scrollObserver.observe(sentinel);
   }
 
+  // ---------- Tabs ----------
+
+  function bindTabs() {
+    document.querySelectorAll('.tab-btn').forEach((btn) => {
+      btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+    });
+  }
+
+  function switchTab(tab) {
+    state.activeTab = tab;
+    document.querySelectorAll('.tab-btn').forEach((btn) => {
+      const active = btn.dataset.tab === tab;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-selected', String(active));
+    });
+    catalogueView.hidden = tab !== 'catalogue';
+    myCardsView.hidden = tab !== 'my-cards';
+    refreshActiveView();
+  }
+
+  function refreshActiveView() {
+    if (state.activeTab === 'my-cards') renderMyCards();
+    else applyFilters();
+  }
+
   // ---------- Controls ----------
 
   function buildTypeChips() {
@@ -90,7 +119,7 @@
     if (state.activeTypes.has(type)) {
       state.activeTypes.delete(type);
       btn.classList.remove('active');
-      applyFilters();
+      refreshActiveView();
       return;
     }
     state.activeTypes.add(type);
@@ -107,7 +136,7 @@
       }
       btn.classList.remove('loading');
     }
-    applyFilters();
+    refreshActiveView();
   }
 
   function bindControls() {
@@ -115,95 +144,88 @@
       clearTimeout(searchTimer);
       searchTimer = setTimeout(() => {
         state.search = searchInput.value;
-        applyFilters();
+        refreshActiveView();
       }, 200);
     });
   }
 
-  // ---------- Category chips ----------
+  // ---------- Collection (owned cards) ----------
 
-  function buildCategoryChips() {
-    const allChip = document.createElement('button');
-    allChip.type = 'button';
-    allChip.className = 'chip category active';
-    allChip.textContent = 'All';
-    allChip.dataset.category = '';
-    allChip.addEventListener('click', () => onCategoryChipClick('', allChip));
-    categoryChipsEl.appendChild(allChip);
-  }
-
-  function onCategoryChipClick(genus, btn) {
-    state.category = genus;
-    categoryChipsEl.querySelectorAll('.chip').forEach((c) => c.classList.remove('active'));
-    btn.classList.add('active');
-    applyFilters();
-  }
-
-  // ---------- Genus / category discovery ----------
-
-  function ensureGenusDiscovery() {
-    if (genusDiscoveryStarted) return;
-    genusDiscoveryStarted = true;
-    runGenusDiscovery();
-  }
-
-  async function runGenusDiscovery() {
-    const CONCURRENCY = 6;
-    const queue = state.speciesList.filter((p) => !(p.id in state.genusById));
-    if (!queue.length) return;
-    categoryLoadingEl.hidden = false;
-    let idx = 0;
-
-    async function worker() {
-      while (idx < queue.length) {
-        const p = queue[idx++];
-        try {
-          const species = await PokeAPI.getSpecies(p.id);
-          recordGenus(p.id, species);
-        } catch (err) { /* skip failures, keep discovering */ }
-      }
+  function loadCollection() {
+    try {
+      return JSON.parse(localStorage.getItem(COLLECTION_KEY)) || {};
+    } catch (err) {
+      return {};
     }
-
-    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
-    categoryLoadingEl.hidden = true;
   }
 
-  function recordGenus(id, species) {
-    if (state.genusById[id]) return;
-    const genus = getEnglishGenus(species);
-    if (!genus) return;
-    state.genusById[id] = genus;
-    addCategoryOption(genus);
-    if (state.category && state.category === genus) scheduleFilterRefresh();
+  function saveCollection() {
+    try {
+      localStorage.setItem(COLLECTION_KEY, JSON.stringify(state.collection));
+    } catch (err) { /* storage unavailable — collection stays in-memory only */ }
   }
 
-  function addCategoryOption(genus) {
-    const already = Array.from(categoryChipsEl.querySelectorAll('.chip')).some((c) => c.dataset.category === genus);
-    if (already) return;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'chip category';
-    btn.textContent = genus;
-    btn.dataset.category = genus;
-    btn.addEventListener('click', () => onCategoryChipClick(genus, btn));
-
-    const chips = Array.from(categoryChipsEl.querySelectorAll('.chip'));
-    let insertBefore = null;
-    for (let i = 1; i < chips.length; i++) {
-      if (chips[i].dataset.category.localeCompare(genus) > 0) { insertBefore = chips[i]; break; }
+  function toggleOwned(id, owned) {
+    const current = state.collection[id];
+    if (owned) {
+      state.collection[id] = { qty: (current && current.qty) || 1, variant: (current && current.variant) || VARIANTS[0] };
+      ensureTypesLoaded(id).then(() => { if (state.activeTab === 'my-cards') renderMyCards(); });
+    } else {
+      state.collection[id] = { qty: 0, variant: (current && current.variant) || VARIANTS[0] };
     }
-    categoryChipsEl.insertBefore(btn, insertBefore);
+    saveCollection();
+    syncCollectionUI(id);
   }
 
-  function scheduleFilterRefresh() {
-    if (refreshTimer) return;
-    refreshTimer = setTimeout(() => {
-      refreshTimer = null;
-      applyFilters();
-    }, 400);
+  function adjustQuantity(id, delta) {
+    const current = state.collection[id] || { qty: 0, variant: VARIANTS[0] };
+    const nextQty = Math.max(0, Math.min(99, current.qty + delta));
+    state.collection[id] = { ...current, qty: nextQty };
+    saveCollection();
+    syncCollectionUI(id);
+    return nextQty;
   }
 
-  // ---------- Filtering & rendering ----------
+  function setVariant(id, variant) {
+    const current = state.collection[id] || { qty: 0 };
+    state.collection[id] = { ...current, variant };
+    saveCollection();
+    syncCollectionUI(id);
+  }
+
+  function syncCollectionUI(id) {
+    document.querySelectorAll(`.poke-card[data-id="${id}"]`).forEach((el) => applyCollectionToCard(el, id));
+    if (state.activeTab === 'my-cards') renderMyCards();
+  }
+
+  function applyCollectionToCard(el, id) {
+    const entry = state.collection[id];
+    const owned = !!(entry && entry.qty > 0);
+    const checkbox = el.querySelector('[data-role="owned-checkbox"]');
+    const qtyBadge = el.querySelector('[data-role="qty-badge"]');
+    const variantTag = el.querySelector('[data-role="variant-tag"]');
+    if (checkbox) checkbox.checked = owned;
+    if (qtyBadge) {
+      qtyBadge.hidden = !owned;
+      qtyBadge.textContent = owned ? `×${entry.qty}` : '';
+    }
+    if (variantTag) {
+      variantTag.hidden = !owned;
+      variantTag.textContent = owned ? entry.variant : '';
+    }
+  }
+
+  async function ensureTypesLoaded(id) {
+    try { await PokeAPI.getPokemon(id); } catch (err) { /* ignore, badges just stay blank */ }
+  }
+
+  function typesFor(id) {
+    const cached = PokeAPI.peekPokemon(id);
+    if (!cached) return null;
+    return cached.types.slice().sort((a, b) => a.slot - b.slot).map((t) => t.type.name);
+  }
+
+  // ---------- Catalogue filtering & rendering ----------
 
   function applyFilters() {
     const q = state.search.trim().toLowerCase();
@@ -220,9 +242,6 @@
         }
         return false;
       });
-    }
-    if (state.category) {
-      list = list.filter((p) => state.genusById[p.id] === state.category);
     }
 
     state.filtered = list;
@@ -255,33 +274,112 @@
   }
 
   function createCardElement(p) {
-    const el = document.createElement('button');
-    el.type = 'button';
+    const el = document.createElement('div');
     el.className = 'poke-card';
-    el.dataset.id = p.id;
+    el.tabIndex = 0;
+    el.setAttribute('role', 'button');
     el.setAttribute('aria-haspopup', 'dialog');
+    el.dataset.id = p.id;
     el.innerHTML = `
-      <span class="dex-num">#${String(p.id).padStart(4, '0')}</span>
-      <span class="sprite-wrap"><img src="${PokeAPI.spriteUrl(p.id)}" alt="" loading="lazy" width="96" height="96"></span>
+      <div class="card-top-row">
+        <label class="owned-toggle" aria-label="Mark as owned">
+          <input type="checkbox" data-role="owned-checkbox">
+          <span class="owned-box" aria-hidden="true"></span>
+        </label>
+        <span class="dex-num">#${String(p.id).padStart(4, '0')}</span>
+      </div>
+      <span class="sprite-wrap"><img src="${PokeAPI.spriteUrl(p.id)}" alt="" loading="lazy" width="68" height="68"></span>
       <span class="name">${displayName(p.name)}</span>
       <span class="type-badges" data-role="types"></span>
+      <span class="qty-badge" data-role="qty-badge" hidden></span>
+      <span class="variant-tag" data-role="variant-tag" hidden></span>
     `;
     const img = el.querySelector('img');
     img.addEventListener('error', () => {
       img.replaceWith(Object.assign(document.createElement('span'), { className: 'sprite-placeholder' }));
     }, { once: true });
-    el.addEventListener('click', () => openModal(p.id));
+
+    const checkbox = el.querySelector('[data-role="owned-checkbox"]');
+    checkbox.addEventListener('click', (e) => e.stopPropagation());
+    checkbox.addEventListener('change', () => toggleOwned(p.id, checkbox.checked));
+
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.owned-toggle')) return;
+      openModal(p.id);
+    });
+    el.addEventListener('keydown', (e) => {
+      if (e.target.closest('.owned-toggle')) return;
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openModal(p.id);
+      }
+    });
+
+    const cachedTypes = typesFor(p.id);
+    if (cachedTypes) el.querySelector('[data-role="types"]').innerHTML = typeBadgesHTML(cachedTypes);
+    applyCollectionToCard(el, p.id);
     return el;
   }
 
   async function loadCardDetail(id, el) {
     try {
-      const [pokemon, species] = await Promise.all([PokeAPI.getPokemon(id), PokeAPI.getSpecies(id)]);
+      const pokemon = await PokeAPI.getPokemon(id);
       const types = pokemon.types.slice().sort((a, b) => a.slot - b.slot).map((t) => t.type.name);
       const badgesEl = el.querySelector('[data-role="types"]');
       if (badgesEl) badgesEl.innerHTML = typeBadgesHTML(types);
-      recordGenus(id, species);
     } catch (err) { /* leave badges blank; grid stays usable */ }
+  }
+
+  // ---------- My Cards ----------
+
+  function renderMyCards() {
+    let ids = Object.keys(state.collection)
+      .map(Number)
+      .filter((id) => state.collection[id] && state.collection[id].qty > 0);
+
+    const q = state.search.trim().toLowerCase();
+    if (q) {
+      ids = ids.filter((id) => {
+        const species = state.speciesById.get(id);
+        return species && (species.name.includes(q) || String(id) === q || String(id).padStart(4, '0').includes(q));
+      });
+    }
+    if (state.activeTypes.size) {
+      ids = ids.filter((id) => {
+        const types = typesFor(id) || [];
+        for (const t of state.activeTypes) if (types.includes(t)) return true;
+        return false;
+      });
+    }
+
+    ids.sort((a, b) => {
+      const qtyDiff = state.collection[b].qty - state.collection[a].qty;
+      if (qtyDiff !== 0) return qtyDiff;
+      const typeA = (typesFor(a) || [])[0] || '';
+      const typeB = (typesFor(b) || [])[0] || '';
+      return typeA.localeCompare(typeB);
+    });
+
+    myCardsGrid.innerHTML = '';
+    const totalCopies = ids.reduce((sum, id) => sum + state.collection[id].qty, 0);
+    resultCountEl.textContent = ids.length ? `${ids.length} Pokémon · ${totalCopies} cards` : '';
+
+    if (!ids.length) {
+      myCardsGrid.innerHTML = '<div class="empty-state">No cards yet — tap the checkbox on a Pokémon in the Catalogue tab to add it here.</div>';
+      return;
+    }
+
+    const frag = document.createDocumentFragment();
+    ids.forEach((id) => {
+      const species = state.speciesById.get(id);
+      if (!species) return;
+      const card = createCardElement(species);
+      if (!typesFor(id)) {
+        ensureTypesLoaded(id).then(() => { if (state.activeTab === 'my-cards') renderMyCards(); });
+      }
+      frag.appendChild(card);
+    });
+    myCardsGrid.appendChild(frag);
   }
 
   // ---------- Modal ----------
@@ -315,11 +413,10 @@
       return;
     }
 
-    recordGenus(id, species);
-
     const types = pokemon.types.slice().sort((a, b) => a.slot - b.slot).map((t) => t.type.name);
     const flavor = getEnglishFlavorText(species);
     const genus = getEnglishGenus(species);
+    const entry = state.collection[id] || { qty: 0, variant: VARIANTS[0] };
 
     modalBody.innerHTML = `
       <div class="detail-header">
@@ -330,6 +427,22 @@
           <div class="genus">${genus || ''}</div>
           <div class="type-badges">${typeBadgesHTML(types)}</div>
         </div>
+      </div>
+
+      <div class="section-title">Leo's Collection</div>
+      <div class="collection-box">
+        <label class="collection-owned">
+          <input type="checkbox" id="collection-owned">
+          <span>Owned</span>
+        </label>
+        <div class="qty-stepper">
+          <button type="button" id="qty-minus" aria-label="Decrease quantity">−</button>
+          <span id="qty-value">${entry.qty}</span>
+          <button type="button" id="qty-plus" aria-label="Increase quantity">+</button>
+        </div>
+        <select id="variant-select" aria-label="Card variant">
+          ${VARIANTS.map((v) => `<option value="${v}">${v}</option>`).join('')}
+        </select>
       </div>
 
       <div class="section-title">About</div>
@@ -347,6 +460,28 @@
       </button>
       <div class="moves-list" id="moves-list" hidden>${buildMovesHTML(pokemon.moves)}</div>
     `;
+
+    const ownedCb = document.getElementById('collection-owned');
+    const qtyValueEl = document.getElementById('qty-value');
+    const variantSelect = document.getElementById('variant-select');
+    ownedCb.checked = entry.qty > 0;
+    variantSelect.value = entry.variant || VARIANTS[0];
+
+    ownedCb.addEventListener('change', () => {
+      toggleOwned(id, ownedCb.checked);
+      qtyValueEl.textContent = state.collection[id].qty;
+    });
+    document.getElementById('qty-minus').addEventListener('click', () => {
+      const nextQty = adjustQuantity(id, -1);
+      qtyValueEl.textContent = nextQty;
+      ownedCb.checked = nextQty > 0;
+    });
+    document.getElementById('qty-plus').addEventListener('click', () => {
+      const nextQty = adjustQuantity(id, 1);
+      qtyValueEl.textContent = nextQty;
+      ownedCb.checked = nextQty > 0;
+    });
+    variantSelect.addEventListener('change', () => setVariant(id, variantSelect.value));
 
     document.getElementById('moves-toggle').addEventListener('click', (e) => {
       const btn = e.currentTarget;

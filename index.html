@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pokédex Catalogue</title>
-<meta name="description" content="A complete, lazy-loading Pokédex covering every Pokémon, powered by PokéAPI.">
+<title>Leo's Pokémon Catalogue</title>
+<meta name="description" content="Leo's Pokémon catalogue and card collection tracker, powered by PokéAPI.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2245%22 fill=%22%23EE1515%22 stroke=%22%23222%22 stroke-width=%224%22/><path d=%22M5 50h90%22 stroke=%22%23222%22 stroke-width=%228%22/><circle cx=%2250%22 cy=%2250%22 r=%2214%22 fill=%22%23fff%22 stroke=%22%23222%22 stroke-width=%226%22/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,9 +19,9 @@
   <div class="header-inner">
     <div class="brand">
       <span class="pokeball" aria-hidden="true"></span>
-      <h1>Pokédex</h1>
+      <h1>Leo's Pokémon Catalogue</h1>
     </div>
-    <p class="tagline">Every Pokémon. Stats, types, moves &amp; evolutions — powered by PokéAPI.</p>
+    <p class="tagline">Track which cards you've got — powered by PokéAPI.</p>
   </div>
 </header>
 
@@ -36,18 +36,22 @@
       <div class="filter-label">Type</div>
       <div id="type-chips" class="chip-row" role="group" aria-label="Filter by type"></div>
     </div>
-
-    <div class="filter-group">
-      <div class="filter-label">Category <span id="category-loading" class="filter-hint" hidden>loading…</span></div>
-      <div id="category-chips" class="chip-row" role="group" aria-label="Filter by category"></div>
-    </div>
   </section>
 
-  <section id="grid-status" class="grid-status" aria-live="polite"></section>
+  <div class="tab-bar" role="tablist">
+    <button type="button" class="tab-btn active" data-tab="catalogue" role="tab" aria-selected="true">Catalogue</button>
+    <button type="button" class="tab-btn" data-tab="my-cards" role="tab" aria-selected="false">My Cards</button>
+  </div>
 
-  <section id="catalogue-grid" class="catalogue-grid" aria-label="Pokémon catalogue"></section>
+  <section id="catalogue-view">
+    <section id="grid-status" class="grid-status" aria-live="polite"></section>
+    <section id="catalogue-grid" class="catalogue-grid" aria-label="Pokémon catalogue"></section>
+    <div id="sentinel" class="sentinel" aria-hidden="true"></div>
+  </section>
 
-  <div id="sentinel" class="sentinel" aria-hidden="true"></div>
+  <section id="my-cards-view" hidden>
+    <section id="my-cards-grid" class="catalogue-grid" aria-label="My cards"></section>
+  </section>
 </main>
 
 <footer class="site-footer">

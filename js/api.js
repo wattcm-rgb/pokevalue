@@ -76,6 +76,12 @@ const PokeAPI = {
     return fetchJSON(`pokeapi:pokemon:${id}`, `${API_BASE}/pokemon/${id}`);
   },
 
+  // Synchronous cache read — returns the pokemon record if already fetched,
+  // or undefined without triggering a network request.
+  peekPokemon(id) {
+    return cacheGet(`pokeapi:pokemon:${id}`);
+  },
+
   // Species record: flavour text, genus, evolution chain link, legendary/mythical flags.
   getSpecies(id) {
     return fetchJSON(`pokeapi:species:${id}`, `${API_BASE}/pokemon-species/${id}`);
